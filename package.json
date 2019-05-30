@@ -1,18 +1,19 @@
 {
-  "name": "redis-schedule",
+  "name": "distributed-schedule",
   "version": "1.0.0",
   "description": "distributed schedule base on redis for node ",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "ijunbin",
   "license": "ISC",
   "dependencies": {
     "cron": "^1.7.1",
     "cron-parser": "^2.11.0",
-    "ioredis": "^4.9.0",
+    "ioredis": "^4.10.0",
     "moment": "^2.24.0",
     "node-schedule": "^1.3.2"
-  }
+  },
+  "homepage": "https://github.com/ijunbin/redis-schedule-demo"
 }
