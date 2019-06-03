@@ -127,6 +127,7 @@ RedisSchedule.prototype.register = async function (timecron, jobname) {
         // 设置过期时间
         await setKeyExpire(key, '1', nextcron.ttl);
     }
+    console.log(`register the job: ${jobname}`);
 }
 
 // 定义任务,jobname要唯一
@@ -139,6 +140,7 @@ RedisSchedule.prototype.defined = async function (jobname, handler) {
         throw new Error(`the job [${jobname}] is exist`);
     }
     REGISTERHANDLER[key] = handler;
+    console.log(`defined the job: ${jobname}`);
 }
 
 // 取消任务
@@ -149,6 +151,7 @@ RedisSchedule.prototype.cancel = async function (jobname) {
     // 删除相关数据
     let key = getKeyByJob(jobname);
     await delJob(key);
+    console.log(`cancel the job: ${jobname}`);
 }
 
 module.exports = RedisSchedule;
