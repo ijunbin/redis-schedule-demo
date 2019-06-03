@@ -52,8 +52,7 @@ RedisSchedule = function (option) {
                                 await jobHandler.call();
                             } else {
                                 // 没有下一次了
-                                await client.hdel(JOBNAMEHASH, key);
-                                delete REGISTERHANDLER[key];
+                                await delJob(key);
                             }
                         } else {
                             console.log(`can not get job ${jobname} metadate`);
@@ -68,6 +67,13 @@ RedisSchedule = function (option) {
             }
         }
     });
+}
+
+// 删除任务
+delJob = async function (key) {
+    delete REGISTERHANDLER[key];
+    await client.del(key);
+    await client.hdel(JOBNAMEHASH, key);
 }
 
 // 获取下一次执行时的信息
@@ -104,7 +110,7 @@ RedisSchedule.prototype.register = async function (timecron, jobname) {
     }
     let key = getKeyByJob(jobname);
     if (!REGISTERHANDLER[key]) {
-        throw new Error('job undefined');
+        throw new Error(`job ${jobname} undefined`);
     }
     let nextcron = getNextCron(timecron);
     if (nextcron.ttl > 0) {
@@ -132,11 +138,6 @@ RedisSchedule.prototype.defined = async function (jobname, handler) {
     if (REGISTERHANDLER[key]) {
         throw new Error(`the job [${jobname}] is exist`);
     }
-    // 判断jobname是否全局存在
-    // let res = await client.hexists(JOBNAMEHASH, key);
-    // if (res) {
-    //     throw new Error(`the job [${jobname}] is exist in other instance`);
-    // }
     REGISTERHANDLER[key] = handler;
 }
 
@@ -146,10 +147,8 @@ RedisSchedule.prototype.cancel = async function (jobname) {
         throw new Error('params error');
     }
     // 删除相关数据
-    delete REGISTERHANDLER[jobname];
     let key = getKeyByJob(jobname);
-    await client.del(key);
-    await client.hdel(JOBNAMEHASH, key);
+    await delJob(key);
 }
 
 module.exports = RedisSchedule;
