@@ -153,52 +153,56 @@ RedisSchedule.prototype.start = async function () {
     PubSub.subscribe(`__keyevent@${this.config.db}__:expired`);
     PubSub.on("message", async (channel, key) => {
         // Handle event
-        let keydetail = key.split(':');
-        if (keydetail.length >= 3) {
-            if (keydetail[0] != PREFIX || self.groupName != keydetail[1]) {
-                return;
-            }
-            // 获取真正的jobname
-            let jobname = key.substr(PREFIX.length + self.groupName.length + 2);
-            let jobHandler = this.registerHandler[key];
-            if (typeof jobHandler === 'function') {
-                // 设置下一次的值行时间
-                let metedata = await client.hget(JOBDETAILHASH, key);
-                if (metedata) {
-                    metedata = JSON.parse(metedata);
-                    let now = moment().unix();
-                    let jobTime = metedata.nextTime;
-                    if (now >= jobTime) {
-                        let ncron = getNextCron(metedata.cron);
-                        let lockKey = self.getJobDoneKey(jobname, jobTime);
-                        let ttl = ncron.ttl > 300 ? ncron.ttl : 300;
-                        let ok = await client.set(lockKey, '1', 'NX', 'EX', ttl);
-                        if (ok) {
-                            // 更新job detail
-                            if (ncron.ttl > 0) {
-                                metedata.nextTime = ncron.nextTime;
-                                await Promise.all([
-                                    client.hset(JOBDETAILHASH, key, JSON.stringify(metedata)),
-                                    setKeyExpire(key, '1', ncron.ttl)
-                                ])
-                            } else {
-                                // 定时器结束
-                                await delJob(key);
-                            }
+        try {
+            let keydetail = key.split(':');
+            if (keydetail.length >= 3) {
+                if (keydetail[0] != PREFIX || self.groupName != keydetail[1]) {
+                    return;
+                }
+                // 获取真正的jobname
+                let jobname = key.substr(PREFIX.length + self.groupName.length + 2);
+                let jobHandler = this.registerHandler[key];
+                if (typeof jobHandler === 'function') {
+                    // 设置下一次的值行时间
+                    let metedata = await client.hget(JOBDETAILHASH, key);
+                    if (metedata) {
+                        metedata = JSON.parse(metedata);
+                        let now = moment().unix();
+                        let jobTime = metedata.nextTime;
+                        if (now >= jobTime) {
+                            let ncron = getNextCron(metedata.cron);
+                            let lockKey = self.getJobDoneKey(jobname, jobTime);
+                            let ttl = ncron.ttl > 300 ? ncron.ttl : 300;
+                            let ok = await client.set(lockKey, '1', 'NX', 'EX', ttl);
+                            if (ok) {
+                                // 更新job detail
+                                if (ncron.ttl > 0) {
+                                    metedata.nextTime = ncron.nextTime;
+                                    await Promise.all([
+                                        client.hset(JOBDETAILHASH, key, JSON.stringify(metedata)),
+                                        setKeyExpire(key, '1', ncron.ttl)
+                                    ])
+                                } else {
+                                    // 定时器结束
+                                    await delJob(key);
+                                }
 
-                            // 调用回调函数
-                            try {
-                                await jobHandler.call();
-                            } catch (ex) {
-                                // do nothing
-                                console.log(`the job [${jobname}] call back error ${ex}`);
+                                // 调用回调函数
+                                try {
+                                    await jobHandler.call();
+                                } catch (ex) {
+                                    // do nothing
+                                    console.log(`the job [${jobname}] call back error ${ex}`);
+                                }
                             }
                         }
+                    } else {
+                        console.log(`can not get the job [${jobname}] metadate`);
                     }
-                } else {
-                    console.log(`can not get the job [${jobname}] metadate`);
                 }
             }
+        } catch (ex) {
+            console.error(`redis expired keyevent call back error ${ex}`);
         }
     });
 }
