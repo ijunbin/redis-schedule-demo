@@ -13,6 +13,7 @@ const moment = require('moment');
     })
 
     schedule.setGroupName('testGroup');
+    
     schedule.defined('function_1', async function () {
         console.log("function 1", moment().format('YYYY-MM:DD HH:mm:ss'));
     })

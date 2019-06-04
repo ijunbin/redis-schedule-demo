@@ -11,8 +11,6 @@ const PREFIX = '__job__';
 const JOBDONE = '__jobdone__';
 // job hash
 const JOBDETAILHASH = '__jobdetail__';
-// 已注册的job
-const REGISTERHANDLER = {};
 
 
 RedisSchedule = function (option) {
@@ -20,16 +18,12 @@ RedisSchedule = function (option) {
         host: "127.0.0.1",
         port: 6379
     };
+    // 已注册的job
+    this.registerHandler = {};
     client = new Redis(this.config);
     PubSub = new Redis(this.config);
 }
 
-// 删除任务
-delJob = async function (key) {
-    delete REGISTERHANDLER[key];
-    await client.del(key);
-    await client.hdel(JOBDETAILHASH, key);
-}
 
 // 获取下一次执行时的信息
 getNextCron = function (timecron) {
@@ -63,7 +57,7 @@ RedisSchedule.prototype.register = async function (timecron, jobname) {
         throw new Error('params error');
     }
     let key = this.getKeyByJob(jobname);
-    if (!REGISTERHANDLER[key]) {
+    if (!this.registerHandler[key]) {
         throw new Error(`job ${jobname} undefined`);
     }
     let nextcron = getNextCron(timecron);
@@ -121,10 +115,10 @@ RedisSchedule.prototype.defined = async function (jobname, handler) {
         throw new Error(`please set the groupName first`);
     }
     let key = this.getKeyByJob(jobname);
-    if (REGISTERHANDLER[key]) {
+    if (this.registerHandler[key]) {
         throw new Error(`the job [${jobname}] is exist`);
     }
-    REGISTERHANDLER[key] = handler;
+    this.registerHandler[key] = handler;
     console.log(`defined the job: ${jobname}`);
 }
 
@@ -139,6 +133,13 @@ RedisSchedule.prototype.cancel = async function (jobname) {
     console.log(`cancel the job: ${jobname}`);
 }
 
+// 删除任务
+RedisSchedule.prototype.delJob = async function (key) {
+    delete this.registerHandler[key];
+    await client.del(key);
+    await client.hdel(JOBDETAILHASH, key);
+}
+
 // 获取job已执行的key
 RedisSchedule.prototype.getJobDoneKey = function (jobname, jobTime) {
     return JOBDONE + ":" + this.groupName + ":" + jobname + ":" + moment.unix(jobTime).format('YYYYMMDDHHmmss');
@@ -147,9 +148,9 @@ RedisSchedule.prototype.getJobDoneKey = function (jobname, jobTime) {
 // 启动
 RedisSchedule.prototype.start = async function () {
 
+    let self = this;
     PubSub.config("SET", "notify-keyspace-events", "Ex");
     PubSub.subscribe(`__keyevent@${this.config.db}__:expired`);
-    let self = this;
     PubSub.on("message", async (channel, key) => {
         // Handle event
         let keydetail = key.split(':');
@@ -159,7 +160,7 @@ RedisSchedule.prototype.start = async function () {
             }
             // 获取真正的jobname
             let jobname = key.substr(PREFIX.length + self.groupName.length + 2);
-            let jobHandler = REGISTERHANDLER[key];
+            let jobHandler = this.registerHandler[key];
             if (typeof jobHandler === 'function') {
                 // 设置下一次的值行时间
                 let metedata = await client.hget(JOBDETAILHASH, key);
